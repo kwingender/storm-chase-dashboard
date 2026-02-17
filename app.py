@@ -132,20 +132,6 @@ window.addEventListener('beforeinstallprompt', (e) => {
 </script>
 """, unsafe_allow_html=True)
 
-# Title and header with Diabeteorologist logo and theme
-st.markdown("""
-<div style="text-align: center; padding: 20px 0; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border-radius: 15px; margin-bottom: 20px; border: 2px solid #dc143c;">
-    <img src="data:image/png;base64,{}" style="height: 120px; margin-bottom: 15px;" alt="Diabeteorologist Logo">
-    <h1 style="font-size: 2.8rem; color: #dc143c; margin: 10px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); font-weight: bold;">
-        🌪️ Storm Chase Dashboard
-    </h1>
-    <p style="font-size: 1.3rem; color: #f0f0f0; margin: 10px 0; font-weight: 600; text-shadow: 1px 1px 2px rgba(0,0,0,0.6);">
-        Sugar Infused Storm Chasing • GPS Tracking • AI Intelligence
-    </p>
-    <div style="background: linear-gradient(90deg, #dc143c, #ff4444, #dc143c); height: 3px; width: 80%; margin: 15px auto; border-radius: 2px;"></div>
-</div>
-""".format(base64.b64encode(open("attached_assets/Diabeteorologist_1757514609323.png", "rb").read()).decode()), unsafe_allow_html=True)
-st.markdown("---")
 
 # Initialize session state for all features
 if 'last_update' not in st.session_state:
