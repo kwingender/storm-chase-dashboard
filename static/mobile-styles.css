@@ -1,0 +1,322 @@
+/* Storm Chase Dashboard - Mobile Optimizations for iPad */
+
+/* PWA and Mobile Optimizations */
+@media screen and (max-width: 1024px) {
+  /* iPad Portrait and Landscape */
+  
+  .main .block-container {
+    padding-top: 2rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    max-width: 100% !important;
+  }
+  
+  /* Larger touch targets for in-vehicle use */
+  .stButton > button {
+    height: 60px !important;
+    font-size: 18px !important;
+    font-weight: bold !important;
+    border-radius: 12px !important;
+    margin: 8px 0 !important;
+    min-width: 120px !important;
+    touch-action: manipulation;
+  }
+  
+  /* Emergency button styling - Diabeteorologist theme */
+  .stButton > button[data-testid*="tracking"] {
+    background: linear-gradient(45deg, #dc143c, #ff4444) !important;
+    color: white !important;
+    box-shadow: 0 6px 12px rgba(220, 20, 60, 0.4) !important;
+    border: 2px solid #8b0000 !important;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8) !important;
+  }
+  
+  .stButton > button[data-testid*="stop"] {
+    background: linear-gradient(45deg, #8b0000, #dc143c) !important;
+    color: white !important;
+    border: 2px solid #4a0000 !important;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8) !important;
+  }
+  
+  /* Enhanced button visibility for all buttons */
+  .stButton > button {
+    background: linear-gradient(135deg, #2d2d2d, #1a1a1a) !important;
+    color: #f0f0f0 !important;
+    border: 2px solid #dc143c !important;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8) !important;
+    transition: all 0.3s ease !important;
+  }
+  
+  .stButton > button:hover {
+    background: linear-gradient(135deg, #dc143c, #ff4444) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 16px rgba(220, 20, 60, 0.3) !important;
+  }
+  
+  /* Enhanced sidebar for mobile */
+  .css-1d391kg {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+  
+  @media (max-width: 768px) {
+    .css-1d391kg {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      height: 100% !important;
+      z-index: 999 !important;
+      background: rgba(255, 255, 255, 0.95) !important;
+      backdrop-filter: blur(10px) !important;
+    }
+  }
+  
+  /* Metrics for chase tracking - Diabeteorologist theme */
+  .metric-container {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 50%, #1a1a1a 100%) !important;
+    border: 2px solid #dc143c !important;
+    border-radius: 15px !important;
+    padding: 20px !important;
+    margin: 10px 0 !important;
+    color: #f0f0f0 !important;
+    box-shadow: 0 8px 16px rgba(220, 20, 60, 0.3) !important;
+  }
+  
+  .metric-container .metric-value {
+    font-size: 2.5rem !important;
+    font-weight: bold !important;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3) !important;
+  }
+  
+  /* Weather parameter cards - Diabeteorologist theme */
+  .weather-param-card {
+    background: linear-gradient(135deg, rgba(45, 45, 45, 0.95), rgba(26, 26, 26, 0.95)) !important;
+    border: 2px solid #dc143c !important;
+    border-radius: 15px !important;
+    padding: 20px !important;
+    margin: 15px 0 !important;
+    box-shadow: 0 8px 25px rgba(220, 20, 60, 0.2) !important;
+    border-left: 6px solid #dc143c !important;
+    color: #f0f0f0 !important;
+  }
+  
+  /* Map optimizations for touch */
+  .folium-map {
+    height: 500px !important;
+    border-radius: 15px !important;
+    overflow: hidden !important;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+  }
+  
+  /* Voice alert styling - Diabeteorologist theme */
+  .voice-alert {
+    position: fixed !important;
+    top: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 9999 !important;
+    background: linear-gradient(45deg, #dc143c, #8b0000) !important;
+    color: white !important;
+    padding: 20px 30px !important;
+    border: 3px solid #f0f0f0 !important;
+    border-radius: 15px !important;
+    font-size: 20px !important;
+    font-weight: bold !important;
+    text-align: center !important;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8) !important;
+    box-shadow: 0 10px 30px rgba(220, 20, 60, 0.6) !important;
+    animation: alertPulse 2s infinite !important;
+  }
+  
+  @keyframes alertPulse {
+    0%, 100% { transform: translateX(-50%) scale(1); }
+    50% { transform: translateX(-50%) scale(1.05); }
+  }
+  
+  /* Enhanced input fields for GPS coordinates - Diabeteorologist theme */
+  .stNumberInput > div > div > input {
+    height: 50px !important;
+    font-size: 18px !important;
+    border-radius: 10px !important;
+    border: 2px solid #dc143c !important;
+    background: rgba(45, 45, 45, 0.9) !important;
+    color: #f0f0f0 !important;
+    padding: 0 15px !important;
+  }
+  
+  .stNumberInput > div > div > input:focus {
+    border-color: #ff4444 !important;
+    box-shadow: 0 0 0 2px rgba(220, 20, 60, 0.3) !important;
+    background: rgba(26, 26, 26, 0.95) !important;
+  }
+  
+  /* Enhanced text input styling */
+  .stTextInput > div > div > input, .stTextArea > div > div > textarea {
+    background: rgba(45, 45, 45, 0.9) !important;
+    color: #f0f0f0 !important;
+    border: 2px solid #dc143c !important;
+    border-radius: 10px !important;
+    font-size: 16px !important;
+  }
+  
+  /* Better selectbox visibility */
+  .stSelectbox > div > div {
+    background: rgba(45, 45, 45, 0.9) !important;
+    border: 2px solid #dc143c !important;
+    border-radius: 10px !important;
+  }
+  
+  .stSelectbox > div > div > div {
+    color: #f0f0f0 !important;
+  }
+  
+  /* Status indicators */
+  .status-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+    animation: statusBlink 2s infinite;
+  }
+  
+  .status-active {
+    background: #28a745;
+    box-shadow: 0 0 10px #28a745;
+  }
+  
+  .status-inactive {
+    background: #6c757d;
+  }
+  
+  @keyframes statusBlink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.3; }
+  }
+  
+  /* Responsive columns for mobile */
+  @media (max-width: 768px) {
+    .row-widget.stColumns {
+      flex-direction: column !important;
+    }
+    
+    .row-widget.stColumns > div {
+      width: 100% !important;
+      margin-bottom: 20px !important;
+    }
+  }
+  
+  /* Enhanced radar/satellite sections for mobile - Diabeteorologist theme */
+  .radar-section, .satellite-section, .hrrr-section {
+    background: linear-gradient(135deg, rgba(45, 45, 45, 0.95), rgba(26, 26, 26, 0.95)) !important;
+    border: 2px solid #dc143c !important;
+    border-radius: 20px !important;
+    padding: 25px !important;
+    margin: 20px 0 !important;
+    box-shadow: 0 10px 30px rgba(220, 20, 60, 0.2) !important;
+    color: #f0f0f0 !important;
+    backdrop-filter: blur(10px) !important;
+  }
+  
+  /* Enhanced spacing for button groups */
+  .stColumns > div {
+    padding: 0 8px !important;
+  }
+  
+  .stColumns > div:first-child {
+    padding-left: 0 !important;
+  }
+  
+  .stColumns > div:last-child {
+    padding-right: 0 !important;
+  }
+  
+  /* Enhanced sidebar styling */
+  .css-1d391kg .stMarkdown {
+    color: #f0f0f0 !important;
+  }
+  
+  .css-1d391kg .stMarkdown h1, 
+  .css-1d391kg .stMarkdown h2, 
+  .css-1d391kg .stMarkdown h3 {
+    color: #dc143c !important;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8) !important;
+  }
+  
+  /* Loading spinners optimized for touch - Diabeteorologist theme */
+  .stSpinner > div {
+    border: 4px solid #f3f3f3 !important;
+    border-top: 4px solid #dc143c !important;
+    width: 50px !important;
+    height: 50px !important;
+  }
+  
+  /* Alert and warning panels */
+  .stAlert > div {
+    border-radius: 15px !important;
+    padding: 20px !important;
+    font-size: 16px !important;
+    margin: 15px 0 !important;
+    border: none !important;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1) !important;
+  }
+  
+  /* GPS tracking status */
+  .gps-status {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 1000;
+  }
+  
+  .gps-active {
+    background: rgba(40, 167, 69, 0.9) !important;
+  }
+  
+  .gps-inactive {
+    background: rgba(108, 117, 125, 0.9) !important;
+  }
+}
+
+/* Landscape specific optimizations */
+@media screen and (orientation: landscape) and (max-height: 768px) {
+  .main .block-container {
+    padding-top: 1rem !important;
+  }
+  
+  .css-1d391kg {
+    width: 350px !important;
+    min-width: 350px !important;
+  }
+  
+  .folium-map {
+    height: 400px !important;
+  }
+}
+
+/* High DPI displays (Retina) */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .weather-param-card, .metric-container {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+  }
+}
+
+/* Dark mode optimizations */
+@media (prefers-color-scheme: dark) {
+  .weather-param-card {
+    background: rgba(30, 30, 30, 0.9) !important;
+    color: white !important;
+    border-left-color: #ff6b6b !important;
+  }
+  
+  .radar-section, .satellite-section, .hrrr-section {
+    background: rgba(30, 30, 30, 0.95) !important;
+    color: white !important;
+  }
+}
