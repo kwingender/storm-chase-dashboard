@@ -6,7 +6,6 @@ import numpy as np
 import os
 import base64
 from openai import OpenAI
-import random
 import time
 import math
 from datetime import datetime, timedelta
@@ -16,9 +15,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from PIL import Image
 import io
-import base64
 import json
-import xarray as xr
 from geopy.distance import geodesic
 from geopy.geocoders import Nominatim
 from shapely.geometry import Point, LineString
@@ -41,36 +38,22 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# PWA and Mobile Integration
-st.markdown("""
-<head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="StormChase">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#dc143c">
-    
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="/static/manifest.json">
-    
-    <!-- iOS Icons -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/icon-180x180.png">
-    <link rel="apple-touch-icon" sizes="152x152" href="/static/icon-152x152.png">
-    <link rel="apple-touch-icon" sizes="120x120" href="/static/icon-120x120.png">
-    
-    <!-- Mobile Styles -->
-    <link rel="stylesheet" href="/static/mobile-styles.css">
-    
-    <!-- Load GPS Tracker JavaScript -->
-    <script src="/static/gps-tracker.js"></script>
-</head>
-""", unsafe_allow_html=True)
+# PWA and Mobile Integration - Inline meta tags, styles, and scripts
+_mobile_css = ""
+try:
+    with open("static/mobile-styles.css", "r") as f:
+        _mobile_css = f.read()
+except FileNotFoundError:
+    pass
 
-# Service Worker Registration
-st.markdown("""
-<script>
-// Register Service Worker for PWA functionality
+_gps_js = ""
+try:
+    with open("static/gps-tracker.js", "r") as f:
+        _gps_js = f.read()
+except FileNotFoundError:
+    pass
+
+_pwa_service_worker_js = """
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
         navigator.serviceWorker.register('/sw.js')
@@ -83,15 +66,11 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// PWA Install Prompt
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt', (e) => {
-    // Prevent the mini-infobar from appearing on mobile
     e.preventDefault();
-    // Save the event so it can be triggered later
     deferredPrompt = e;
     
-    // Show install button (you can customize this)
     const installBtn = document.createElement('button');
     installBtn.innerHTML = '📱 Install Storm Chase App';
     installBtn.style.cssText = `
@@ -122,16 +101,48 @@ window.addEventListener('beforeinstallprompt', (e) => {
     
     document.body.appendChild(installBtn);
     
-    // Auto-hide after 30 seconds
     setTimeout(() => {
         if (installBtn.parentElement) {
             installBtn.remove();
         }
     }, 30000);
 });
-</script>
-""", unsafe_allow_html=True)
+"""
 
+_pwa_html = (
+    '<style>\n' + _mobile_css + '\n</style>\n'
+    '<script>\n' + _gps_js + '\n' + _pwa_service_worker_js + '\n</script>'
+)
+st.markdown(_pwa_html, unsafe_allow_html=True)
+
+# Title and header with Diabeteorologist logo and theme
+logo_b64 = ""
+for logo_path in ["static/diabeteorologist_logo.png", "attached_assets/Diabeteorologist_1757514609323.png"]:
+    try:
+        with open(logo_path, "rb") as f:
+            logo_b64 = base64.b64encode(f.read()).decode()
+        break
+    except FileNotFoundError:
+        continue
+
+if logo_b64:
+    logo_html = f'<img src="data:image/png;base64,{logo_b64}" style="height: 120px; margin-bottom: 15px;" alt="Diabeteorologist Logo">'
+else:
+    logo_html = '<p style="font-size: 3rem; margin-bottom: 10px;">🌪️🩺</p>'
+
+st.markdown(f"""
+<div style="text-align: center; padding: 20px 0; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border-radius: 15px; margin-bottom: 20px; border: 2px solid #dc143c;">
+    {logo_html}
+    <h1 style="font-size: 2.8rem; color: #dc143c; margin: 10px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); font-weight: bold;">
+        🌪️ Storm Chase Dashboard
+    </h1>
+    <p style="font-size: 1.3rem; color: #f0f0f0; margin: 10px 0; font-weight: 600; text-shadow: 1px 1px 2px rgba(0,0,0,0.6);">
+        Sugar Infused Storm Chasing • GPS Tracking • AI Intelligence
+    </p>
+    <div style="background: linear-gradient(90deg, #dc143c, #ff4444, #dc143c); height: 3px; width: 80%; margin: 15px auto; border-radius: 2px;"></div>
+</div>
+""", unsafe_allow_html=True)
+st.markdown("---")
 
 # Initialize session state for all features
 if 'last_update' not in st.session_state:
@@ -156,45 +167,44 @@ if 'last_ai_enhancement' not in st.session_state:
     st.session_state.last_ai_enhancement = 0
 
 # Weather data fetching functions
-def get_spc_mesonet_data(lat, lon):
-    """Fetch SPC Mesonet data for location"""
+OPEN_METEO_GFS_URL = "https://api.open-meteo.com/v1/gfs"
+
+def get_open_meteo_data(lat, lon):
+    """Fetch real weather data from Open-Meteo GFS API including surface and pressure level parameters"""
     try:
-        # SPC Mesonet closest station data
-        response = requests.get(
-            f"{SPC_MESONET_BASE}data.php",
-            params={
-                'f': 'csv',
-                'lat': lat,
-                'lon': lon
-            },
-            timeout=10
-        )
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "current": ["temperature_2m", "dewpoint_2m", "surface_pressure", "wind_speed_10m", "wind_direction_10m", "cape"],
+            "hourly": ["cape", "temperature_850hPa", "temperature_700hPa", "temperature_500hPa",
+                       "wind_speed_850hPa", "wind_speed_500hPa", "wind_speed_700hPa",
+                       "wind_direction_850hPa", "wind_direction_500hPa", "wind_direction_700hPa",
+                       "wind_speed_925hPa", "wind_direction_925hPa",
+                       "geopotential_height_500hPa", "geopotential_height_850hPa"],
+            "temperature_unit": "fahrenheit",
+            "wind_speed_unit": "kn",
+            "timezone": "America/Chicago",
+            "forecast_days": 1
+        }
+        response = requests.get(OPEN_METEO_GFS_URL, params=params, timeout=15)
         if response.status_code == 200:
-            # Parse CSV data (simplified example)
-            lines = response.text.split('\n')
-            if len(lines) > 1:
-                data = lines[1].split(',')
-                return {
-                    'temperature': float(data[2]) if len(data) > 2 else None,
-                    'dewpoint': float(data[3]) if len(data) > 3 else None,
-                    'wind_speed': float(data[4]) if len(data) > 4 else None
-                }
+            return response.json()
+        else:
+            st.error(f"Open-Meteo API returned status {response.status_code}")
+            return None
     except Exception as e:
-        st.error(f"SPC Mesonet API error: {str(e)}")
-    return None
+        st.error(f"Open-Meteo API error: {str(e)}")
+        return None
 
 def get_noaa_forecast_data(lat, lon):
-    """Fetch NOAA forecast data including atmospheric parameters"""
+    """Fetch NOAA forecast data as secondary fallback"""
     try:
-        # Get gridpoint info
         response = requests.get(f"{NOAA_API_BASE}/points/{lat},{lon}", timeout=10)
         if response.status_code == 200:
             grid_data = response.json()
             grid_x = grid_data['properties']['gridX']
             grid_y = grid_data['properties']['gridY']
             office = grid_data['properties']['gridId']
-            
-            # Get forecast data
             forecast_response = requests.get(
                 f"{NOAA_API_BASE}/gridpoints/{office}/{grid_x},{grid_y}/forecast",
                 timeout=10
@@ -202,8 +212,6 @@ def get_noaa_forecast_data(lat, lon):
             if forecast_response.status_code == 200:
                 forecast_data = forecast_response.json()
                 current_period = forecast_data['properties']['periods'][0]
-                
-                # Extract available parameters
                 return {
                     'temperature': current_period.get('temperature', 70),
                     'humidity': current_period.get('relativeHumidity', {}).get('value', 65),
@@ -213,107 +221,146 @@ def get_noaa_forecast_data(lat, lon):
         st.error(f"NOAA API error: {str(e)}")
     return None
 
-def calculate_derived_parameters(surface_data):
-    """Calculate atmospheric parameters using proper meteorological formulas"""
-    if not surface_data:
-        return None
-    
+def _find_closest_hourly_index(hourly_data):
+    """Find the index of the closest hour to current time in hourly data"""
     try:
-        temp = surface_data.get('temperature', 70)  # °F
-        dewpoint = surface_data.get('dewpoint', 60)  # °F
-        pressure = surface_data.get('pressure', 1013.25)  # hPa
+        times = hourly_data.get('time', [])
+        now = datetime.now()
+        min_diff = float('inf')
+        best_idx = 0
+        for i, t in enumerate(times):
+            dt_parsed = datetime.fromisoformat(t)
+            diff = abs((now - dt_parsed).total_seconds())
+            if diff < min_diff:
+                min_diff = diff
+                best_idx = i
+        return best_idx
+    except Exception:
+        return 0
+
+def calculate_derived_parameters(api_data):
+    """Calculate atmospheric parameters from Open-Meteo GFS data using real pressure level values"""
+    if not api_data:
+        return None
+
+    try:
+        current = api_data.get('current', {})
+        hourly = api_data.get('hourly', {})
         
-        # Convert to proper units
-        temp_c = (temp - 32) * 5/9 if temp else 21.1  # Default 70°F
-        dewpoint_c = (dewpoint - 32) * 5/9 if dewpoint else 15.5  # Default 60°F
+        if not current or 'temperature_2m' not in current:
+            st.warning("Open-Meteo response missing current data")
+            return None
         
-        # Calculate mixing ratio and equivalent potential temperature
-        import math
+        idx = _find_closest_hourly_index(hourly)
+
+        temp_f = current.get('temperature_2m')
+        dewpoint_f = current.get('dewpoint_2m')
+        if temp_f is None or dewpoint_f is None:
+            st.warning("Open-Meteo response missing temperature/dewpoint")
+            return None
         
-        # Saturation vapor pressure (Bolton 1980)
-        def saturation_vapor_pressure(t_celsius):
-            return 6.112 * math.exp(17.67 * t_celsius / (t_celsius + 243.5))
-        
-        # Actual vapor pressure
-        es_dewpoint = saturation_vapor_pressure(dewpoint_c)
-        mixing_ratio = 0.622 * es_dewpoint / (pressure - es_dewpoint)  # kg/kg
-        
-        # Lifting Condensation Level (LCL) - accurate formula
-        lcl_pressure = pressure * ((temp_c - dewpoint_c) / (temp_c + 273.15 - dewpoint_c - 273.15 + 0.01)) ** (1.0 / 0.28571)
-        lcl_height = (1 - (lcl_pressure / pressure) ** 0.1903) * 44307.7  # meters
-        
-        # Mixed Layer CAPE approximation (improved)
-        # This is still simplified - real CAPE needs full sounding profile
-        temp_spread = temp_c - dewpoint_c
-        
-        if temp_spread > 20:  # Dry conditions
-            cape_estimate = max(0, (temp_spread - 15) * 150)
-        elif temp_spread < 5:  # Very moist conditions
-            cape_estimate = max(0, (temp_c - 15) * 180 + (25 - temp_spread) * 100)
-        else:  # Moderate conditions
-            cape_estimate = max(0, (temp_c - 10) * 120 + (20 - temp_spread) * 80)
-        
-        # Add seasonal and temperature adjustments
-        if temp_c > 30:  # Hot conditions favor higher CAPE
-            cape_estimate *= 1.5
-        elif temp_c < 15:  # Cool conditions limit CAPE
-            cape_estimate *= 0.5
-            
-        # CIN estimate based on LCL height and temperature profile
-        cin_estimate = max(5, min(200, lcl_height / 10 + temp_spread * 2))
-        
-        # Wind shear estimates (would need wind profile data for accuracy)
-        # Using temperature gradient as proxy for instability
-        shear_estimate = min(80, max(10, temp_spread * 2 + (30 - temp_c)))
-        
-        # Storm Relative Helicity approximation
-        srh_estimate = min(500, max(50, cape_estimate / 15 + shear_estimate * 3))
-        
+        cape = current.get('cape', 0) or 0
+        wind_speed_sfc = current.get('wind_speed_10m', 0) or 0
+        wind_dir_sfc = current.get('wind_direction_10m', 0) or 0
+
+        def _hourly_val(key):
+            vals = hourly.get(key, [])
+            if idx < len(vals) and vals[idx] is not None:
+                return vals[idx]
+            return 0
+
+        wind_speed_500 = _hourly_val('wind_speed_500hPa')
+        wind_dir_500 = _hourly_val('wind_direction_500hPa')
+        wind_speed_700 = _hourly_val('wind_speed_700hPa')
+        wind_dir_700 = _hourly_val('wind_direction_700hPa')
+        wind_speed_925 = _hourly_val('wind_speed_925hPa')
+        wind_dir_925 = _hourly_val('wind_direction_925hPa')
+        temp_700_f = _hourly_val('temperature_700hPa')
+        temp_500_f = _hourly_val('temperature_500hPa')
+        gph_500 = _hourly_val('geopotential_height_500hPa')
+        gph_850 = _hourly_val('geopotential_height_850hPa')
+
+        hourly_cape = _hourly_val('cape')
+        if cape == 0 and hourly_cape > 0:
+            cape = hourly_cape
+
+        def _wind_components(speed, direction):
+            rad = math.radians(direction)
+            u = speed * math.sin(rad)
+            v = speed * math.cos(rad)
+            return u, v
+
+        u_sfc, v_sfc = _wind_components(wind_speed_sfc, wind_dir_sfc)
+        u_500, v_500 = _wind_components(wind_speed_500, wind_dir_500)
+        u_700, v_700 = _wind_components(wind_speed_700, wind_dir_700)
+        u_925, v_925 = _wind_components(wind_speed_925, wind_dir_925)
+
+        shear_0_6km = math.sqrt((u_500 - u_sfc) ** 2 + (v_500 - v_sfc) ** 2)
+        shear_0_3km = math.sqrt((u_700 - u_sfc) ** 2 + (v_700 - v_sfc) ** 2)
+
+        temp_c = (temp_f - 32) * 5 / 9
+        dewpoint_c = (dewpoint_f - 32) * 5 / 9
+        lcl_height = max(0, 125 * (temp_c - dewpoint_c))
+
+        cin_estimate = max(5, lcl_height / 15)
+
+        height_diff_m = gph_500 - gph_850 if (gph_500 and gph_850 and gph_500 > gph_850) else 3500
+        height_diff_km = height_diff_m / 1000.0
+        t700_c = (temp_700_f - 32) * 5 / 9
+        t500_c = (temp_500_f - 32) * 5 / 9
+        lapse_rate_700_500 = (t700_c - t500_c) / height_diff_km if height_diff_km > 0 else 0
+
+        srh_cross = abs(u_925 * v_sfc - u_sfc * v_925)
+        srh_0_1km = srh_cross * 0.925 * 2.5
+
+        mean_wind_0_6km = (wind_speed_sfc + wind_speed_500) / 2.0
+
+        mean_wind_u = (u_sfc + u_500) / 2.0
+        mean_wind_v = (v_sfc + v_500) / 2.0
+        mean_wind_dir = math.degrees(math.atan2(mean_wind_u, mean_wind_v)) % 360
+
         return {
-            'CAPE': round(cape_estimate),
-            'Dewpoint': dewpoint,
-            'Shear_0_6km': round(shear_estimate),
-            'CIN': round(cin_estimate),
-            'SRH_0_1km': round(srh_estimate),
-            'LCL_Height': round(lcl_height),
-            'mixing_ratio': round(mixing_ratio * 1000, 2),  # g/kg
-            'source': 'calculated_from_surface_obs'
-        }
-        
-    except Exception as e:
-        st.error(f"Parameter calculation error: {str(e)}")
-        # Fallback with basic estimates - use safe defaults
-        dewpoint_fallback = surface_data.get('dewpoint', 60) if surface_data else 60
-        return {
-            'CAPE': 1500,
-            'Dewpoint': dewpoint_fallback,
-            'Shear_0_6km': 30,
-            'CIN': 50,
-            'SRH_0_1km': 150,
-            'LCL_Height': 1000,
-            'source': 'fallback_estimates'
+            'CAPE': round(float(cape)),
+            'Dewpoint': round(float(dewpoint_f), 1),
+            'Shear_0_6km': round(float(shear_0_6km), 1),
+            'CIN': round(float(cin_estimate)),
+            'SRH_0_1km': round(float(srh_0_1km)),
+            'LCL_Height': round(float(lcl_height)),
+            'Shear_0_3km': round(float(shear_0_3km), 1),
+            'Lapse_Rate_700_500': round(float(lapse_rate_700_500), 1),
+            'Mean_Wind_0_6km': round(float(mean_wind_0_6km), 1),
+            'Mean_Wind_Dir': round(float(mean_wind_dir), 1),
+            'Wind_U_Sfc': round(float(u_sfc), 2),
+            'Wind_V_Sfc': round(float(v_sfc), 2),
+            'Wind_U_500': round(float(u_500), 2),
+            'Wind_V_500': round(float(v_500), 2),
+            'Wind_U_700': round(float(u_700), 2),
+            'Wind_V_700': round(float(v_700), 2),
+            'Wind_U_925': round(float(u_925), 2),
+            'Wind_V_925': round(float(v_925), 2),
+            'source': 'open_meteo_gfs'
         }
 
+    except Exception as e:
+        st.error(f"Parameter calculation error: {str(e)}")
+        return None
+
 def generate_weather_data(lat, lon):
-    """Generate weather data using real APIs where possible, fallback to mock"""
-    # Try to get real data first
-    spc_data = get_spc_mesonet_data(lat, lon)
-    noaa_data = get_noaa_forecast_data(lat, lon)
-    
-    # Combine data sources
-    combined_data = {}
-    if spc_data:
-        combined_data.update(spc_data)
-    if noaa_data:
-        combined_data.update(noaa_data)
-    
-    # Calculate derived parameters
-    derived = calculate_derived_parameters(combined_data)
-    if derived:
-        return derived
-    
-    # Return None if no real data available - don't use random fallback
-    st.error("⚠️ Unable to fetch real weather data from APIs")
+    """Generate weather data using Open-Meteo GFS as primary source, NOAA as fallback"""
+    if 'cached_weather' in st.session_state and st.session_state.cached_weather:
+        cache_age = time.time() - st.session_state.get('last_weather_fetch', 0)
+        if cache_age < 600:
+            return st.session_state.cached_weather
+
+    api_data = get_open_meteo_data(lat, lon)
+    if api_data:
+        derived = calculate_derived_parameters(api_data)
+        if derived:
+            st.session_state.cached_weather = derived
+            st.session_state.last_weather_fetch = time.time()
+            return derived
+
+    st.error("⚠️ Unable to fetch real weather data from Open-Meteo API. Parameters may be unavailable. Please check your internet connection and try again.")
     return None
 
 def get_radar_stations_near_location(lat, lon, radius_km=300):
@@ -685,41 +732,56 @@ def calculate_composite_indices(weather_data, surface_data=None):
         ehi = (mixed_layer_cape * srh_enhanced) / 160000
         indices['EHI'] = max(0, min(ehi, 8))
         
-        # Estimated 700-500mb Lapse Rate from surface conditions
-        # Professional approximation based on CAPE and surface temperature
-        temp_f = 70 + (dewpoint - 50) * 0.8  # Estimate surface temp from dewpoint
-        temp_c = (temp_f - 32) * 5/9
-        # Lapse rate increases with instability
-        cape_factor = min(1.5, cape / 3000)
-        lapse_rate_700_500 = 6.5 + (cape_factor * 2.5)  # Base + instability enhancement
-        indices['Lapse_Rate_700_500'] = max(4.0, min(lapse_rate_700_500, 12.0))
+        # 700-500mb Lapse Rate - use real value from Open-Meteo if available
+        real_lapse = weather_data.get('Lapse_Rate_700_500', 0)
+        if real_lapse > 0:
+            indices['Lapse_Rate_700_500'] = max(4.0, min(real_lapse, 12.0))
+        else:
+            cape_factor = min(1.5, cape / 3000)
+            lapse_rate_700_500 = 6.5 + (cape_factor * 2.5)
+            indices['Lapse_Rate_700_500'] = max(4.0, min(lapse_rate_700_500, 12.0))
         
-        # Enhanced 0-3km Shear (Low-level shear critical for tornadogenesis)
-        # Estimate as ~65% of 0-6km shear (typical atmospheric profile)
-        shear_0_3 = shear_0_6 * 0.65
+        # 0-3km Shear - use real value from Open-Meteo if available
+        real_shear_0_3 = weather_data.get('Shear_0_3km', 0)
+        if real_shear_0_3 > 0:
+            shear_0_3 = real_shear_0_3
+        else:
+            shear_0_3 = shear_0_6 * 0.65
         indices['Shear_0_3km'] = max(0, shear_0_3)
         
         # Bunkers Storm Motion Components (Critical for storm-relative analysis)
-        # Simplified Bunkers calculation using mean wind and shear vector
-        mean_wind_0_6 = shear_0_6 * 0.5  # Rough estimate of mean wind speed
-        
-        # Bunkers right-moving storm motion (simplified)
-        # Actual calculation requires wind profile, this is approximation
-        deviation_angle = 30  # degrees right of mean wind
+        # Uses real wind profile data from Open-Meteo when available
         import math
         
-        # Assume mean wind direction (can be enhanced with actual wind data)
-        mean_wind_dir = 225  # SW flow typical for Great Plains
-        storm_dir = mean_wind_dir + deviation_angle
+        u_sfc = weather_data.get('Wind_U_Sfc', 0)
+        v_sfc = weather_data.get('Wind_V_Sfc', 0)
+        u_500 = weather_data.get('Wind_U_500', 0)
+        v_500 = weather_data.get('Wind_V_500', 0)
+        u_700 = weather_data.get('Wind_U_700', 0)
+        v_700 = weather_data.get('Wind_V_700', 0)
+        u_925 = weather_data.get('Wind_U_925', 0)
+        v_925 = weather_data.get('Wind_V_925', 0)
         
-        bunkers_u = mean_wind_0_6 * math.cos(math.radians(storm_dir))
-        bunkers_v = mean_wind_0_6 * math.sin(math.radians(storm_dir))
+        mean_wind_u = (u_sfc + u_925 + u_700 + u_500) / 4.0
+        mean_wind_v = (v_sfc + v_925 + v_700 + v_500) / 4.0
         
-        indices['Bunkers_Right_U'] = bunkers_u
-        indices['Bunkers_Right_V'] = bunkers_v
-        indices['Storm_Motion_Speed'] = math.sqrt(bunkers_u**2 + bunkers_v**2)
+        shear_u = u_500 - u_sfc
+        shear_v = v_500 - v_sfc
+        shear_mag = math.sqrt(shear_u**2 + shear_v**2) if (shear_u or shear_v) else 1.0
         
-        # Mean Wind 0-6km (Storm propagation)
+        deviation = 7.5
+        perp_u = -shear_v / shear_mag * deviation
+        perp_v = shear_u / shear_mag * deviation
+        
+        bunkers_u = mean_wind_u + perp_u
+        bunkers_v = mean_wind_v + perp_v
+        
+        indices['Bunkers_Right_U'] = round(bunkers_u, 2)
+        indices['Bunkers_Right_V'] = round(bunkers_v, 2)
+        indices['Storm_Motion_Speed'] = round(math.sqrt(bunkers_u**2 + bunkers_v**2), 1)
+        
+        # Mean Wind 0-6km from real data
+        mean_wind_0_6 = weather_data.get('Mean_Wind_0_6km', shear_0_6 * 0.5)
         indices['Mean_Wind_0_6km'] = mean_wind_0_6
         
         # Additional Professional Parameters
@@ -781,7 +843,7 @@ def check_tornado_warnings(lat, lon, radius_miles=50):
 def get_openai_client():
     """Initialize OpenAI client with API key"""
     try:
-        api_key = os.environ.get("OPENAI_API_KEY")
+        api_key = os.environ.get("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY", None)
         if not api_key:
             return None
         return OpenAI(api_key=api_key)
@@ -983,14 +1045,14 @@ def generate_intelligent_targets(base_lat, base_lon, current_weather_data, radiu
     targets = []
     
     try:
-        # Define search grid around base location
+        # Define search grid around base location (coarser grid for API efficiency)
         grid_points = []
-        lat_step = 0.5  # ~35 miles
-        lon_step = 0.5  # ~35 miles at mid-latitudes
+        lat_step = 1.0  # ~69 miles
+        lon_step = 1.0  # ~55 miles at mid-latitudes
         
         # Create analysis grid within radius
-        for lat_offset in [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2]:
-            for lon_offset in [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2]:
+        for lat_offset in [-2, -1, 0, 1, 2]:
+            for lon_offset in [-2, -1, 0, 1, 2]:
                 grid_lat = base_lat + lat_offset * lat_step
                 grid_lon = base_lon + lon_offset * lon_step
                 
@@ -1001,10 +1063,11 @@ def generate_intelligent_targets(base_lat, base_lon, current_weather_data, radiu
                 if distance <= radius_miles:
                     grid_points.append((grid_lat, grid_lon, distance))
         
-        # Analyze each grid point
+        # Analyze each grid point using real API data
         for grid_lat, grid_lon, distance in grid_points:
-            # Generate weather data for this location (with some variation)
-            location_weather = simulate_weather_variation(current_weather_data, grid_lat, grid_lon, base_lat, base_lon)
+            location_weather = get_real_weather_for_location(grid_lat, grid_lon)
+            if not location_weather:
+                continue
             
             # Calculate storm potential score
             chase_score = calculate_storm_chasability(location_weather, grid_lat, grid_lon)
@@ -1097,44 +1160,26 @@ def generate_intelligent_targets(base_lat, base_lon, current_weather_data, radiu
             'reasoning': "Default target due to analysis error"
         }]
 
-def simulate_weather_variation(base_weather, target_lat, target_lon, base_lat, base_lon):
-    """Simulate realistic weather parameter variations across geographic area"""
-    try:
-        # Calculate distance and direction effects
-        lat_diff = target_lat - base_lat
-        lon_diff = target_lon - base_lon
-        
-        # Create variations based on location
-        variations = {}
-        
-        # CAPE tends to increase with distance from dryline (westward in Great Plains)
-        cape_variation = lon_diff * 200 + random.uniform(-300, 300)
-        variations['CAPE'] = max(500, base_weather['CAPE'] + cape_variation)
-        
-        # Dewpoint varies with elevation and moisture transport
-        dewpoint_variation = -lat_diff * 3 + random.uniform(-5, 5)
-        variations['Dewpoint'] = max(40, base_weather['Dewpoint'] + dewpoint_variation)
-        
-        # Wind shear can vary significantly across mesoscale
-        shear_variation = random.uniform(-15, 15)
-        variations['Shear_0_6km'] = max(10, base_weather['Shear_0_6km'] + shear_variation)
-        
-        # CIN varies with boundary proximity
-        cin_variation = abs(lat_diff) * 20 + random.uniform(-20, 20)
-        variations['CIN'] = max(0, base_weather['CIN'] + cin_variation)
-        
-        # SRH enhanced near boundaries
-        srh_variation = abs(lat_diff + lon_diff) * 30 + random.uniform(-50, 50)
-        variations['SRH_0_1km'] = max(50, base_weather['SRH_0_1km'] + srh_variation)
-        
-        # LCL height varies with moisture
-        lcl_variation = dewpoint_variation * -10 + random.uniform(-200, 200)
-        variations['LCL_Height'] = max(200, base_weather['LCL_Height'] + lcl_variation)
-        
-        return variations
-        
-    except Exception as e:
-        return base_weather  # Return base weather if simulation fails
+def get_real_weather_for_location(target_lat, target_lon):
+    """Fetch real weather data from Open-Meteo for a specific target location with caching"""
+    if 'location_weather_cache' not in st.session_state:
+        st.session_state.location_weather_cache = {}
+
+    cache_key = f"{round(target_lat, 2)},{round(target_lon, 2)}"
+    cache = st.session_state.location_weather_cache
+    if cache_key in cache:
+        entry = cache[cache_key]
+        if time.time() - entry['time'] < 600:
+            return entry['data']
+
+    api_data = get_open_meteo_data(target_lat, target_lon)
+    if api_data:
+        derived = calculate_derived_parameters(api_data)
+        if derived:
+            cache[cache_key] = {'data': derived, 'time': time.time()}
+            return derived
+
+    return None
 
 def generate_enhanced_target_reasoning(weather_data, composite_indices, storm_mode, target_type, score):
     """Generate comprehensive AI reasoning using advanced meteorological parameters"""
@@ -2086,66 +2131,33 @@ needs_target_refresh = (
     current_time - st.session_state.last_target_update > target_refresh_interval
 )
     
-# Manual refresh controls
-col_refresh1, col_refresh2 = st.columns([3, 1])
-with col_refresh1:
-    st.markdown("🎯 **Intelligent Chase Targets** • Auto-refresh: 15min")
-with col_refresh2:
-    if st.button("🔄 Refresh Targets", key="manual_target_refresh", help="Force refresh targets and AI analysis"):
-        needs_target_refresh = True
-        st.session_state.last_ai_enhancement = 0  # Reset AI throttle
-    
-# Generate or use cached targets
+# Generate or use cached targets (always runs for map plotting)
 if needs_target_refresh:
     with st.spinner("🧠 Analyzing weather data for optimal chase targets..."):
-        # Generate fresh weather data and targets
         current_weather = generate_weather_data(lat, lon)
         intelligent_targets = generate_intelligent_targets(lat, lon, current_weather)
-        
-        # Update cache
         st.session_state.cached_targets = intelligent_targets
         st.session_state.cached_weather = current_weather
         st.session_state.last_target_update = current_time
-        
-        st.success(f"✨ **Targets updated** at {datetime.now().strftime('%I:%M %p')}")
 else:
-    # Use cached data
     intelligent_targets = st.session_state.cached_targets
     current_weather = st.session_state.cached_weather
-    
-    next_refresh = st.session_state.last_target_update + target_refresh_interval
-    minutes_until_refresh = int((next_refresh - current_time) / 60)
-    st.info(f"🔄 **Using cached targets** • Next refresh in {minutes_until_refresh} minutes")
-    
-# AI enhancement with hourly throttling
-ai_refresh_interval = 60 * 60  # 1 hour
+
+# AI enhancement with hourly throttling (always runs for map plotting)
+ai_refresh_interval = 60 * 60
 needs_ai_refresh = (
-    current_time - st.session_state.last_ai_enhancement > ai_refresh_interval or
-    st.button("🧠 Get AI Analysis", key="manual_ai_refresh", help="Get fresh AI recommendations")
+    current_time - st.session_state.last_ai_enhancement > ai_refresh_interval
 )
-    
 if needs_ai_refresh and intelligent_targets:
     with st.spinner("🧠 Getting AI recommendations..."):
         enhanced_targets = enhance_targets_with_ai(intelligent_targets, current_weather)
         st.session_state.last_ai_enhancement = current_time
-        st.success("🧠 **AI analysis updated**")
 else:
     enhanced_targets = intelligent_targets if intelligent_targets else []
-    
-# Display intelligent target information
+
+# Add targets to map (always runs regardless of expander state)
 if enhanced_targets:
-    st.markdown("**🎯 Intelligent Chase Targets:**")
-    
-    # Show top target with AI analysis if available
-    top_target = enhanced_targets[0]
-    if top_target.get('ai_enhanced'):
-        with st.expander("🧠 AI Chase Analysis", expanded=True):
-            st.success(f"🎯 **Top Target**: Score {top_target['score']:.0f} • {top_target['distance_miles']:.0f} miles")
-            st.write(top_target.get('ai_analysis', 'Analysis unavailable'))
-        
-    # Add intelligent targets to map
     for i, target in enumerate(enhanced_targets):
-        # Color coding by severity/score
         if target['severity'] == 'High':
             color = 'red'
             icon = 'star'
@@ -2156,7 +2168,6 @@ if enhanced_targets:
             color = 'green'
             icon = 'cloud'
         
-        # Create detailed popup with meteorological information
         popup_html = f"""
         <div style="width: 250px;">
             <h4>🎯 {target['name']}</h4>
@@ -2179,9 +2190,34 @@ if enhanced_targets:
             tooltip=f"{target['name']} • Score: {target['score']:.0f}",
             icon=folium.Icon(color=color, icon=icon, prefix='fa')
         ).add_to(m)
-else:
-    st.warning("⚠️ No chase-worthy targets identified in current conditions")
-    st.info("This typically means weather parameters don't support severe storm development")
+
+# Collapsible chase target details and controls
+with st.expander("🎯 Chase Targets & Controls", expanded=False):
+    col_refresh1, col_refresh2, col_refresh3 = st.columns([3, 1, 1])
+    with col_refresh1:
+        target_count = len(enhanced_targets) if enhanced_targets else 0
+        st.markdown(f"**{target_count} targets plotted** • Auto-refresh: 15min")
+    with col_refresh2:
+        if st.button("🔄 Refresh Targets", key="manual_target_refresh"):
+            st.session_state.cached_targets = None
+            st.session_state.last_target_update = 0
+            st.session_state.last_ai_enhancement = 0
+            st.rerun()
+    with col_refresh3:
+        if st.button("🧠 AI Analysis", key="manual_ai_refresh"):
+            st.session_state.last_ai_enhancement = 0
+            st.rerun()
+
+    if enhanced_targets:
+        top_target = enhanced_targets[0]
+        st.success(f"🎯 **Top Target**: Score {top_target['score']:.0f} • {top_target['distance_miles']:.0f} miles")
+        if top_target.get('ai_enhanced'):
+            st.write(top_target.get('ai_analysis', 'Analysis unavailable'))
+        
+        for i, target in enumerate(enhanced_targets):
+            st.markdown(f"**{i+1}. {target['name']}** — Score: {target['score']:.0f} | {target['severity']} | {target['distance_miles']:.0f} mi")
+    else:
+        st.warning("No chase-worthy targets in current conditions")
     
 # Add comprehensive layer control for storm chasing
 layer_control = folium.LayerControl(
@@ -2246,48 +2282,42 @@ m.get_root().html.add_child(folium.Element(legend_control_html))  # type: ignore
 # Display comprehensive storm chasing map (full width)
 map_data = st_folium(m, width=None, height=600, key="main_chase_map")
     
-# Enhanced map status with SPC integration info
-map_status_col1, map_status_col2 = st.columns(2)
-with map_status_col1:
-    st.success("🗺️ **Interactive Storm Chase Map** • Real-time radar & SPC overlays active")
-with map_status_col2:
-    st.info("📱 Use layer control (top-right) to toggle radar, outlooks, and watches")
+st.caption("📱 Use layer control (top-right corner of map) to toggle radar, outlooks, and watches")
+
+with st.expander("⚡ SPC Status & Map Info", expanded=False):
+    spc_col1, spc_col2, spc_col3 = st.columns(3)
+    with spc_col1:
+        st.metric("Day 1 Outlook", "Available", help="Current day convective outlook from SPC")
+        st.caption("🎯 Categorical risk levels visible on map")
+    with spc_col2:
+        st.metric("Active Watches", "Real-time", help="Live tornado and severe thunderstorm watches")
+        st.caption("⚠️ Polygon overlays show active warning areas")
+    with spc_col3:
+        st.metric("Mesoscale Discussions", "Updated", help="SPC mesoscale discussions (MCDs)")
+        st.caption("📋 Areas under enhanced surveillance")
     
-# SPC outlook summary
-st.markdown("### ⚡ Storm Prediction Center Status")
-spc_col1, spc_col2, spc_col3 = st.columns(3)
-    
-with spc_col1:
-    st.metric("Day 1 Outlook", "Available", help="Current day convective outlook from SPC")
-    st.caption("🎯 Categorical risk levels visible on map")
-    
-with spc_col2:
-    st.metric("Active Watches", "Real-time", help="Live tornado and severe thunderstorm watches")
-    st.caption("⚠️ Polygon overlays show active warning areas")
-    
-with spc_col3:
-    st.metric("Mesoscale Discussions", "Updated", help="SPC mesoscale discussions (MCDs)")
-    st.caption("📋 Areas under enhanced surveillance")
-    
-# Toggle for advanced SPC features
-with st.expander("🎯 Advanced SPC Analysis Tools", expanded=False):
     st.markdown("**Probability Overlays:**")
     prob_col1, prob_col2 = st.columns(2)
-    
     with prob_col1:
         st.markdown("• **🌪️ Tornado Probability** - Shows tornado likelihood areas")
         st.markdown("• **🧊 Hail Probability** - Significant hail risk zones")
-    
     with prob_col2:
         st.markdown("• **⚡ Wind Probability** - Damaging wind potential")
         st.markdown("• **📋 MCDs** - Areas of enhanced surveillance")
     
-st.info("💡 **Pro Tip:** Enable probability layers when targeting specific hazards during a chase")
-st.caption("⏰ All SPC data updates automatically every 30 minutes or when new products are issued")
+    st.info("💡 **Pro Tip:** Enable probability layers when targeting specific hazards during a chase")
 
 # Weather Parameters Section - Enhanced two-column layout below map
 st.markdown("---")
-st.header("⛈️ Advanced Weather Parameters")
+header_col, refresh_col = st.columns([5, 1])
+with header_col:
+    st.header("⛈️ Advanced Weather Parameters")
+with refresh_col:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🔄 Refresh Data", key="refresh_weather"):
+        st.session_state.pop('cached_weather', None)
+        st.session_state.pop('last_weather_fetch', None)
+        st.rerun()
 st.markdown("Comprehensive meteorological analysis with 16+ professional parameters")
 
 # Two-column layout for weather parameters
